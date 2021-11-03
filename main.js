@@ -1,6 +1,18 @@
 import './style.css';
 import Split from 'split-grid';
 import { encode, decode } from 'js-base64';
+import * as monaco from 'monaco-editor';
+import HtmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+import CssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+import JsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
+window.MonacoEnvironment = {
+  getWorker (_, label) {
+    if(label === 'html') return new HtmlWorker()
+    if(label === 'css') return new CssWorker()
+    if(label === 'javascript') return new JsWorker()
+  }
+}
 
 const $ = selector => document.querySelector(selector);
 
@@ -20,26 +32,48 @@ const $html = $('#html');
 const $css = $('#css');
 const $js = $('#js');
 
-function init () {
-  const { pathname } = window.location;
-  const [ baseHtml, baseCss, baseJs ] = pathname.slice(1).split('%7C');
+const { pathname } = window.location;
+const [ baseHtml, baseCss, baseJs ] = pathname.slice(1).split('%7C');
 
-  const html = decode(baseHtml);
-  const css = decode(baseCss);
-  const js = decode(baseJs);
+const html = baseHtml ? decode(baseHtml) : '';
+const css = baseCss ? decode(baseCss) : '';
+const js = baseJs ? decode(baseJs) : '';
 
-  $html.value = html;
-  $css.value = css;
-  $js.value = js;
-
-  const htmlForPreview = createHtml({ html, css, js });
-  $('iframe').setAttribute('srcdoc', htmlForPreview);
+const EDITOR_OPTIONS = {
+  automaticLayout: true,
+  theme: 'vs-dark'
 }
 
-const update = () => {
-  const html = $html.value;
-  const css = $css.value;
-  const js = $js.value;
+const htmlEditor = monaco.editor.create($html, {
+  value: html,
+  language: 'html',
+  ...EDITOR_OPTIONS
+});
+
+const cssEditor = monaco.editor.create($css, {
+  value: css,
+  language: 'css',
+  ...EDITOR_OPTIONS
+});
+
+const jsEditor = monaco.editor.create($js, {
+  value: js,
+  language: 'javascript',
+  ...EDITOR_OPTIONS
+});
+
+htmlEditor.onDidChangeModelContent(update);
+cssEditor.onDidChangeModelContent(update);
+jsEditor.onDidChangeModelContent(update);
+
+const htmlForPreview = createHtml({ html, css, js });
+$('iframe').setAttribute('srcdoc', htmlForPreview);
+
+
+function update () {
+  const html = htmlEditor.getValue();
+  const css = cssEditor.getValue();
+  const js = jsEditor.getValue();
 
   const hashedCode = `${encode(html)}|${encode(css)}|${encode(js)}`;
   window.history.replaceState(null, null, `/${hashedCode}`);
@@ -49,12 +83,8 @@ const update = () => {
   $('iframe').setAttribute('srcdoc', htmlForPreview);
 }
 
-$html.addEventListener('input', update);
-$css.addEventListener('input', update);
-$js.addEventListener('input', update);
 
-
-const createHtml = ({ html, css, js }) => {
+function createHtml ({ html, css, js }) {
 
   return `
   <!DOCTYPE html>
@@ -73,5 +103,3 @@ const createHtml = ({ html, css, js }) => {
   </html>
   `
 };
-
-init();
